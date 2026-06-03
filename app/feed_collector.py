@@ -3,9 +3,7 @@ from app.database import SessionLocal
 from app.models import Feed
 
 RSS_FEEDS = [
-    "https://www.iamsterdam.com/en/rss",
-    "https://www.sortiraparis.com/en/feed",
-    "https://www.expatica.com/fr/feed",
+    "https://rss.nytimes.com/services/xml/rss/nyt/Travel.xml",
 ]
 
 def collect_feeds():

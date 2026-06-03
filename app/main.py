@@ -8,8 +8,17 @@ from app.content_agent import generate_blog
 from app.feed_collector import collect_feeds
 from app.feed_collector import collect_feeds
 from app.models import Feed, Draft, PublishingQueue
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 templates = Jinja2Templates(
     directory="app/templates"

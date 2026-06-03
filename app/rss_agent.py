@@ -1,10 +1,8 @@
 import feedparser
 
 RSS_FEEDS = [
-
+    "https://rss.nytimes.com/services/xml/rss/nyt/Travel.xml",
     "https://www.lonelyplanet.com/news/rss.xml",
-
-    "https://rss.nytimes.com/services/xml/rss/nyt/Travel.xml"
 ]
 
 def get_articles():
