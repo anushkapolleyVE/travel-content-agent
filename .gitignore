@@ -1,0 +1,42 @@
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Environment variables
+.env
+
+# Logs
+*.log
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+
+# Database files (if any local sqlite)
+*.sqlite3
+*.db
+
+# Uvicorn / FastAPI
+*.pid
+
+# Node (if frontend exists)
+node_modules/
+
+# Build outputs
+dist/
+build/
