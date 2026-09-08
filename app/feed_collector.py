@@ -4,6 +4,10 @@ from app.models import Feed
 
 RSS_FEEDS = [
     "https://rss.nytimes.com/services/xml/rss/nyt/Travel.xml",
+    "https://www.theguardian.com/travel/rss",
+    "https://feeds.bbci.co.uk/news/world/rss.xml",
+    "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+    "https://feeds.nationalgeographic.com/ng/News/News_Main",
 ]
 
 
