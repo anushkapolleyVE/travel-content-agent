@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, Inbox, CheckCircle } from "lucide-react";
+import { FileText, Inbox } from "lucide-react";
 import api from "../api/api";
 
 function Drafts() {
@@ -159,12 +159,9 @@ function Drafts() {
                       fontSize: "0.8125rem",
                       fontWeight: 600,
                       color: "var(--accent-emerald)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4
                     }}
                   >
-                    <CheckCircle size={14} /> Approved — queued for publishing
+                    ✅ Approved — queued for publishing
                   </span>
                 )}
 

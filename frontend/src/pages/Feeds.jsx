@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Newspaper, Inbox, CheckCircle } from "lucide-react";
+import { Newspaper, Inbox } from "lucide-react";
 import api from "../api/api";
 import "./Feeds.css";
 
@@ -136,9 +136,7 @@ function Feeds() {
                 )}
 
                 {feed.status === "generated" && (
-                  <span className="feed-done-text" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <CheckCircle size={14} /> Draft created
-                  </span>
+                  <span className="feed-done-text">✨ Draft created</span>
                 )}
 
                 {feed.status === "rejected" && (
