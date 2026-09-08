@@ -1,28 +1,51 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
+from contextlib import asynccontextmanager
 
-from app.database import SessionLocal
-from app.models import Feed, Draft
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+
+from app.database import engine, get_db
+from app.models import Base, Feed, Draft, PublishingQueue
 from app.content_agent import generate_blog
 from app.feed_collector import collect_feeds
-from app.feed_collector import collect_feeds
-from app.models import Feed, Draft, PublishingQueue
-from fastapi.middleware.cors import CORSMiddleware
+from app.social_agent import publish_post
+from app.scheduler import start_scheduler
 
-app = FastAPI()
+
+# -------------------------
+# App Lifecycle
+# -------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Create tables on startup and start the RSS scheduler."""
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("Database tables ready")
+    except Exception as e:
+        print(f"Warning: Could not create tables: {e}")
+    try:
+        start_scheduler()
+    except Exception as e:
+        print(f"Warning: Could not start scheduler: {e}")
+    print("Travel Content Agent started")
+    yield
+    print("Travel Content Agent shutting down")
+
+
+app = FastAPI(
+    title="Travel Content Agent",
+    lifespan=lifespan
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-templates = Jinja2Templates(
-    directory="app/templates"
-)
 
 # -------------------------
 # Home
@@ -36,20 +59,51 @@ def home():
 
 
 # -------------------------
+# Stats
+# -------------------------
+
+@app.get("/stats")
+def stats(db: Session = Depends(get_db)):
+    return {
+        "feeds": db.query(Feed).count(),
+        "drafts": db.query(Draft).count(),
+        "queue": db.query(PublishingQueue).count()
+    }
+
+
+# -------------------------
+# Collect Feeds
+# -------------------------
+
+@app.post("/collect")
+def collect(db: Session = Depends(get_db)):
+    """Manually trigger RSS feed collection."""
+    try:
+        added = collect_feeds()
+        total = db.query(Feed).count()
+        return {
+            "message": f"Collected {added} new feeds",
+            "total": total
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to collect feeds: {str(e)}"
+        )
+
+
+# -------------------------
 # Feed API
 # -------------------------
 
 @app.get("/feeds")
-def get_feeds():
-
-    db = SessionLocal()
-
-    feeds = db.query(Feed).all()
-
+def get_feeds(db: Session = Depends(get_db)):
+    feeds = db.query(Feed).order_by(Feed.id.desc()).all()
     return [
         {
             "id": feed.id,
             "title": feed.title,
+            "summary": feed.summary,
             "status": feed.status
         }
         for feed in feeds
@@ -57,46 +111,25 @@ def get_feeds():
 
 
 # -------------------------
-# Dashboard
-# -------------------------
-
-@app.get("/dashboard")
-def dashboard(request: Request):
-
-    db = SessionLocal()
-
-    feeds = db.query(Feed).all()
-
-    return templates.TemplateResponse(
-        request=request,
-        name="dashboard.html",
-        context={
-            "feeds": feeds
-        }
-    )
-
-
-# -------------------------
 # Approve Feed
 # -------------------------
 
 @app.post("/approve/{feed_id}")
-def approve(feed_id: int):
-
-    db = SessionLocal()
-
+def approve(feed_id: int, db: Session = Depends(get_db)):
     feed = db.query(Feed).filter(
         Feed.id == feed_id
     ).first()
 
-    if feed:
-        feed.status = "approved"
-        db.commit()
+    if not feed:
+        raise HTTPException(
+            status_code=404,
+            detail="Feed not found"
+        )
 
-    return RedirectResponse(
-        "/dashboard",
-        status_code=303
-    )
+    feed.status = "approved"
+    db.commit()
+
+    return {"message": "Feed approved", "id": feed_id}
 
 
 # -------------------------
@@ -104,46 +137,49 @@ def approve(feed_id: int):
 # -------------------------
 
 @app.post("/reject/{feed_id}")
-def reject(feed_id: int):
-
-    db = SessionLocal()
-
+def reject(feed_id: int, db: Session = Depends(get_db)):
     feed = db.query(Feed).filter(
         Feed.id == feed_id
     ).first()
 
-    if feed:
-        feed.status = "rejected"
-        db.commit()
+    if not feed:
+        raise HTTPException(
+            status_code=404,
+            detail="Feed not found"
+        )
 
-    return RedirectResponse(
-        "/dashboard",
-        status_code=303
-    )
+    feed.status = "rejected"
+    db.commit()
+
+    return {"message": "Feed rejected", "id": feed_id}
 
 
 # -------------------------
 # Generate Blog
 # -------------------------
 
-@app.get("/generate/{feed_id}")
-def generate(feed_id: int):
-
-    db = SessionLocal()
-
+@app.post("/generate/{feed_id}")
+def generate(feed_id: int, db: Session = Depends(get_db)):
     feed = db.query(Feed).filter(
         Feed.id == feed_id
     ).first()
 
     if not feed:
-        return {
-            "error": "Feed not found"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Feed not found"
+        )
 
-    content = generate_blog(
-        feed.title,
-        feed.summary
-    )
+    try:
+        content = generate_blog(
+            feed.title,
+            feed.summary
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate blog: {str(e)}"
+        )
 
     draft = Draft(
         feed_id=feed.id,
@@ -152,14 +188,10 @@ def generate(feed_id: int):
     )
 
     db.add(draft)
-
     feed.status = "generated"
-
     db.commit()
 
-    return {
-        "message": "draft generated"
-    }
+    return {"message": "Draft generated", "id": feed_id}
 
 
 # -------------------------
@@ -167,16 +199,13 @@ def generate(feed_id: int):
 # -------------------------
 
 @app.get("/drafts")
-def get_drafts():
-
-    db = SessionLocal()
-
-    drafts = db.query(Draft).all()
-
+def get_drafts(db: Session = Depends(get_db)):
+    drafts = db.query(Draft).order_by(Draft.id.desc()).all()
     return [
         {
             "id": draft.id,
             "title": draft.title,
+            "content": draft.content,
             "status": draft.status
         }
         for draft in drafts
@@ -184,31 +213,20 @@ def get_drafts():
 
 
 # -------------------------
-# Draft Dashboard
+# Approve Draft
 # -------------------------
 
-@app.get("/draft-dashboard")
-def draft_dashboard(request: Request):
-
-    db = SessionLocal()
-
-    drafts = db.query(Draft).all()
-
-    return templates.TemplateResponse(
-        request=request,
-        name="drafts.html",
-        context={
-            "drafts": drafts
-        }
-    )
 @app.post("/approve-draft/{draft_id}")
-def approve_draft(draft_id: int):
-
-    db = SessionLocal()
-
+def approve_draft(draft_id: int, db: Session = Depends(get_db)):
     draft = db.query(Draft).filter(
         Draft.id == draft_id
     ).first()
+
+    if not draft:
+        raise HTTPException(
+            status_code=404,
+            detail="Draft not found"
+        )
 
     draft.status = "approved"
 
@@ -220,45 +238,47 @@ def approve_draft(draft_id: int):
     ]
 
     for platform in platforms:
-
         queue = PublishingQueue(
             draft_id=draft.id,
             platform=platform
         )
-
         db.add(queue)
 
     db.commit()
 
-    return RedirectResponse(
-        "/draft-dashboard",
-        status_code=303
-    )
+    return {"message": "Draft approved and queued", "id": draft_id}
+
+
+# -------------------------
+# Reject Draft
+# -------------------------
 
 @app.post("/reject-draft/{draft_id}")
-def reject_draft(draft_id: int):
-
-    db = SessionLocal()
-
+def reject_draft(draft_id: int, db: Session = Depends(get_db)):
     draft = db.query(Draft).filter(
         Draft.id == draft_id
     ).first()
 
-    draft.status = "rejected"
+    if not draft:
+        raise HTTPException(
+            status_code=404,
+            detail="Draft not found"
+        )
 
+    draft.status = "rejected"
     db.commit()
 
-    return RedirectResponse(
-        "/draft-dashboard",
-        status_code=303
-    )
+    return {"message": "Draft rejected", "id": draft_id}
+
+
+# -------------------------
+# Publishing Queue API
+# -------------------------
+
 @app.get("/publishing-queue")
-def publishing_queue():
-
-    db = SessionLocal()
-
-    queue = db.query(
-        PublishingQueue
+def publishing_queue(db: Session = Depends(get_db)):
+    queue = db.query(PublishingQueue).order_by(
+        PublishingQueue.id.desc()
     ).all()
 
     return [
@@ -270,13 +290,20 @@ def publishing_queue():
         }
         for q in queue
     ]
-from app.social_agent import publish_post
+
+
+# -------------------------
+# Publish
+# -------------------------
 
 @app.post("/publish/{queue_id}")
 def publish(queue_id: int):
+    success = publish_post(queue_id)
 
-    publish_post(queue_id)
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail="Queue item not found"
+        )
 
-    return {
-        "message": "published"
-    }
+    return {"message": "Published", "id": queue_id}

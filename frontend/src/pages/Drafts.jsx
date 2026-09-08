@@ -1,86 +1,185 @@
 import { useEffect, useState } from "react";
+import { FileText, Inbox } from "lucide-react";
 import api from "../api/api";
 
 function Drafts() {
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState({});
+  const [expanded, setExpanded] = useState({});
 
   useEffect(() => {
-    const fetchDrafts = async () => {
-      try {
-        const res = await api.get("/drafts");
-        setDrafts(res.data);
-      } catch (error) {
-        console.error("Failed to load drafts:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchDrafts();
   }, []);
 
-  const loadDrafts = async () => {
+  const fetchDrafts = async () => {
     try {
       const res = await api.get("/drafts");
       setDrafts(res.data);
     } catch (error) {
-      console.error("Failed to reload drafts:", error);
+      console.error("Failed to load drafts:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const approveDraft = async (id) => {
+  const handleAction = async (id, action) => {
+    setActionLoading((prev) => ({ ...prev, [`${id}-${action}`]: true }));
     try {
-      await api.post(`/approve-draft/${id}`);
-      await loadDrafts();
+      await api.post(`/${action}/${id}`);
+      await fetchDrafts();
     } catch (error) {
-      console.error("Failed to approve draft:", error);
+      console.error(`Failed to ${action}:`, error);
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [`${id}-${action}`]: false }));
     }
   };
 
-  const rejectDraft = async (id) => {
-    try {
-      await api.post(`/reject-draft/${id}`);
-      await loadDrafts();
-    } catch (error) {
-      console.error("Failed to reject draft:", error);
-    }
+  const toggleExpand = (id) => {
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const getBadgeClass = (status) => {
+    return `badge badge-${status || "pending"}`;
   };
 
   if (loading) {
-    return <h2>Loading drafts...</h2>;
+    return (
+      <div className="page-loader">
+        <div className="spinner spinner-dark" />
+        <span>Loading drafts...</span>
+      </div>
+    );
   }
 
   return (
     <div>
-      <h2>Drafts</h2>
+      <div className="page-header">
+        <h1>
+          <FileText size={24} />
+          Blog Drafts
+        </h1>
+        <span
+          style={{
+            fontSize: "0.875rem",
+            color: "var(--text-muted)",
+            fontWeight: 500,
+            background: "var(--bg-card)",
+            padding: "6px 14px",
+            borderRadius: 20,
+            border: "1px solid var(--border-light)",
+          }}
+        >
+          {drafts.length} drafts
+        </span>
+      </div>
 
       {drafts.length === 0 ? (
-        <p>No drafts found.</p>
+        <div className="empty-state">
+          <Inbox size={48} />
+          <h3>No drafts yet</h3>
+          <p>
+            Generate blog drafts from approved feeds on the Feeds page. AI will
+            create SEO-friendly articles for you.
+          </p>
+        </div>
       ) : (
-        drafts.map((draft) => (
-          <div
-            key={draft.id}
-            style={{
-              border: "1px solid gray",
-              margin: "10px",
-              padding: "10px",
-            }}
-          >
-            <h3>{draft.title}</h3>
+        <div className="data-grid">
+          {drafts.map((draft) => (
+            <div className="item-card" key={draft.id}>
+              <div className="item-card-header">
+                <h3>{draft.title}</h3>
+                <span className={getBadgeClass(draft.status)}>
+                  {draft.status}
+                </span>
+              </div>
 
-            <p>Status: {draft.status}</p>
+              <div className="item-card-body">
+                <p
+                  style={{
+                    WebkitLineClamp: expanded[draft.id] ? "unset" : 3,
+                    overflow: expanded[draft.id] ? "visible" : "hidden",
+                    display: expanded[draft.id] ? "block" : "-webkit-box",
+                    whiteSpace: expanded[draft.id] ? "pre-wrap" : "normal",
+                  }}
+                >
+                  {draft.content || "No content available."}
+                </p>
+                {draft.content && draft.content.length > 150 && (
+                  <button
+                    className="btn-ghost btn-sm"
+                    onClick={() => toggleExpand(draft.id)}
+                    style={{ marginTop: 8 }}
+                  >
+                    {expanded[draft.id] ? "Show less" : "Read more"}
+                  </button>
+                )}
+              </div>
 
-            <button onClick={() => approveDraft(draft.id)}>Approve</button>
+              <div className="item-card-footer">
+                {draft.status === "pending" && (
+                  <>
+                    <button
+                      className="btn-success btn-sm"
+                      onClick={() =>
+                        handleAction(draft.id, "approve-draft")
+                      }
+                      disabled={
+                        actionLoading[`${draft.id}-approve-draft`]
+                      }
+                    >
+                      {actionLoading[`${draft.id}-approve-draft`] ? (
+                        <div className="spinner" />
+                      ) : (
+                        "Approve & Queue"
+                      )}
+                    </button>
 
-            <button
-              onClick={() => rejectDraft(draft.id)}
-              style={{ marginLeft: "10px" }}
-            >
-              Reject
-            </button>
-          </div>
-        ))
+                    <button
+                      className="btn-danger btn-sm"
+                      onClick={() =>
+                        handleAction(draft.id, "reject-draft")
+                      }
+                      disabled={
+                        actionLoading[`${draft.id}-reject-draft`]
+                      }
+                    >
+                      {actionLoading[`${draft.id}-reject-draft`] ? (
+                        <div className="spinner" />
+                      ) : (
+                        "Reject"
+                      )}
+                    </button>
+                  </>
+                )}
+
+                {draft.status === "approved" && (
+                  <span
+                    style={{
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      color: "var(--accent-emerald)",
+                    }}
+                  >
+                    ✅ Approved — queued for publishing
+                  </span>
+                )}
+
+                {draft.status === "rejected" && (
+                  <span
+                    style={{
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      color: "var(--text-muted)",
+                    }}
+                  >
+                    Rejected
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
