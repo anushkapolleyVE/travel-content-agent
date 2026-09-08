@@ -7,7 +7,6 @@ RSS_FEEDS = [
     "https://www.theguardian.com/travel/rss",
     "https://feeds.bbci.co.uk/news/world/rss.xml",
     "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
-    "https://feeds.nationalgeographic.com/ng/News/News_Main",
 ]
 
 
