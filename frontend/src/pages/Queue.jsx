@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Send, Inbox } from "lucide-react";
+import { Send, Inbox, Linkedin, Instagram, Facebook, Twitter, Smartphone, CheckCircle } from "lucide-react";
 import api from "../api/api";
 
 function Queue() {
@@ -42,14 +42,15 @@ function Queue() {
     return `badge badge-${status || "pending"}`;
   };
 
-  const getPlatformEmoji = (platform) => {
-    const map = {
-      linkedin: "💼",
-      instagram: "📸",
-      facebook: "👥",
-      x: "𝕏",
-    };
-    return map[platform] || "📱";
+  const getPlatformIcon = (platform) => {
+    const props = { size: 20 };
+    switch(platform) {
+      case "linkedin": return <Linkedin {...props} />;
+      case "instagram": return <Instagram {...props} />;
+      case "facebook": return <Facebook {...props} />;
+      case "x": return <Twitter {...props} />;
+      default: return <Smartphone {...props} />;
+    }
   };
 
   if (loading) {
@@ -98,8 +99,8 @@ function Queue() {
             <div className="item-card" key={item.id}>
               <div className="item-card-header">
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: "1.25rem" }}>
-                    {getPlatformEmoji(item.platform)}
+                  <span style={{ display: "flex", alignItems: "center", color: "var(--text-secondary)" }}>
+                    {getPlatformIcon(item.platform)}
                   </span>
                   <div>
                     <span className={getPlatformClass(item.platform)}>
@@ -143,9 +144,12 @@ function Queue() {
                       fontSize: "0.8125rem",
                       fontWeight: 600,
                       color: "var(--accent-sky)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4
                     }}
                   >
-                    ✅ Published
+                    <CheckCircle size={14} /> Published
                   </span>
                 )}
               </div>

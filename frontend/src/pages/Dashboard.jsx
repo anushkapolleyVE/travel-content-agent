@@ -5,6 +5,7 @@ import {
   FileText,
   Send,
   RefreshCw,
+  Zap,
 } from "lucide-react";
 import api from "../api/api";
 import "./Dashboard.css";
@@ -125,7 +126,7 @@ function Dashboard() {
       </div>
 
       <div className="dashboard-tips card">
-        <h3>🚀 Quick Start</h3>
+        <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}><Zap size={18} style={{ color: "var(--accent-amber)" }} /> Quick Start</h3>
         <ol>
           <li>
             Click <strong>Collect Feeds</strong> to pull the latest travel
